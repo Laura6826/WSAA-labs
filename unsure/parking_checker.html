@@ -1,0 +1,332 @@
+<!-- WSAA-project: Web Services and Applications.
+     REST-SERVER for car-park space availability in Cork City.
+     Author: Laura Lyons -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <!-- Bootstrap JS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+Knujsl5/5hb7t8lJAYzdiE+U4p6v7zSTz3AYi3QqZ9ko4l" crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="content">
+        <h1 class="text-center mb-4" style=" color: rgb(199, 5, 5); ">Welcome to Cork City Parking Checker</h1>
+        <h4 class="text-center mb-4" style="color: rgb(199, 5, 5); ">Check the availability of parking spaces in Cork City car parks.</h4>
+
+        <!-- Current time display -->
+        <div id="currentTimeDisplay" style="font-size: 1.2rem; color: black;">
+            The time is now: <span id="currentTime"></span>
+        </div>        
+        
+        <!-- Car park selection dropdown-->
+        <div class="mt-4">
+            <label for="carParkDropdown" class="form-label">Select Car Park:</label>
+            <select id="carParkDropdown" class="form-select"></select>
+            <button class="btn btn-success mt-2" onclick="checkFreeSpaces()">Check Availability</button>
+        </div>
+
+        <!-- Car park space availability -->
+        <div style="text-align: center;" class="mt-4 alert" id="checkFreeSpaces" role="alert" style="font-size: 1.2rem; background-color: rgb(71, 195, 85); border: 2px solid rgb(0, 12, 2); border-radius: 8px; padding: 10px;">
+            <label for="checkFreeSpaces" class="form-label" style="color: rgb(0, 3, 1); display: block; margin-bottom: 5px;">Parking space availability</label>
+            <label for="carParkDropdown" class="form-label" style=" font-size: small; color: black; " >(Only available for verified carparks) </label>
+            <span id="freeSpacesContent" style="font-size: 1rem;"></span>
+        </div>            
+        
+        <!-- Container for side-by-side display -->
+        <div style="display: flex; gap: 20px; margin-bottom: 20px; justify-content: space-between;">
+            <!-- Car park opening hours -->
+            <div style="flex: 1;">
+                <!-- Button to toggle opening hours -->
+                <button id="toggleOpeningHoursBtn" class="btn btn-info" 
+                    style="width: 100%; font-size: 1.2rem; border: 2px solid blue; border-radius: 8px; padding:10px; margin-bottom: 10px;">
+                    Show Opening Hours
+                </button>
+                
+                <!-- Opening hours container -->
+                <div class="mt-4 alert alert-info" id="openingHoursResult" role="alert" 
+                    style="font-size: 1.2rem; background-color: lightblue; border: 2px solid blue; border-radius: 8px; padding: 10px; display: none;">
+                    <label class="form-label" style="font-size: 1.2rem; color: rgb(0, 0, 11); display: block; margin-bottom: 5px; font-weight: bold;">
+                        Car park opening hours
+                    </label>
+                    <span id="openingHoursContent" style="font-size: 1.2rem; color: rgb(0, 0, 11); display: block; margin-bottom: 5px; font-weight: bold;">
+                        Dynamic opening hours content will appear here.
+                    </span>
+                </div>
+                
+                <!-- Error message container -->
+                <div id="carParkInfoResult" class="alert" style="font-size: 1.2rem; margin-top: 10px;"></div>
+            </div>
+
+            <!-- Car park height restrictions -->
+            <div style="flex: 1;">
+                <!-- Toggle button for height restriction -->
+                <button id="toggleHeightRestrictionBtn" class="btn btn-danger" 
+                    style="width: 100%; font-size: 1.2rem; border: 2px solid rgb(134, 9, 9); border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                    Car Park Height Restriction
+                </button>
+                
+                <!-- Height restriction container -->
+                <div class="mt-4 alert alert-danger" id="heightRestrictionNotice" role="alert" 
+                    style="font-size: 1.2rem; background-color: rgb(217, 94, 94); border: 2px solid rgb(134, 9, 9); border-radius: 8px; padding: 10px; display: none;">
+                    <label class="form-label" style="font-size: 1.2rem; color: rgb(3, 0, 0); display: block; margin-bottom: 5px; font-weight: bold;">
+                        Height restrictions
+                    </label>
+                    <span id="heightRestrictionContent" style="font-size: 1.2rem; color: rgb(3, 0, 0); display: block; margin-bottom: 5px; font-weight: bold;">
+                        Dynamic height restriction details will appear here.
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Car Park Section -->
+        <div id="addCarPark" style="margin-top: 20px;">
+            <h4>Add New Car Park</h4>
+            <input type="text" id="newCarParkName" placeholder="Car Park Name" required style="margin-bottom: 10px; padding: 8px;">
+            <button id="addCarParkButton" style="font-size: 1.2rem; border: 2px solid #000; border-radius: 8px; padding: 10px;">
+                Add Car Park
+            </button>
+        </div>
+    </div>
+    <script>
+        // Fetch parking data from the server
+        async function fetchParkingData() {
+            try {
+                const response = await fetch("/api/fetch"); 
+                if (!response.ok) {
+                    throw new Error(`Server Error: ${response.status} ${response.statusText}`);
+                }
+                const data = await response.json(); // Parse the JSON response
+                console.log("Fetched parking data:", data); // Debug: Log the API response
+                return data;
+            } catch (error) {
+                console.error("Error fetching parking data:", error);
+                return [];
+            }
+        }
+
+        // Function to set and display the current time
+        function updateCurrentTime() {
+            const now = new Date(); // Get the current date and time
+            const hours = String(now.getHours()).padStart(2, '0'); // Format hours (24-hour format)
+            const minutes = String(now.getMinutes()).padStart(2, '0'); // Format minutes
+            const seconds = String(now.getSeconds()).padStart(2, '0'); // Format seconds
+            const formattedTime = `${hours}:${minutes}:${seconds}`; // Combine into a time string
+            document.getElementById('currentTime').innerText = formattedTime; // Update the content of span
+        }
+
+        // Call the function immediately and then every second
+        updateCurrentTime(); // Initialize the time display
+        setInterval(updateCurrentTime, 1000); // Update every second
+
+        // Get Current Day Name
+        function getCurrentDayName() {
+            const dayIndex = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+            const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            return days[dayIndex];
+        }
+
+        // Populate dropdown menu with car park options
+        async function populateDropdown() {
+            const parkingData = await fetchParkingData(); // Get data from the live API
+            console.log("Populating dropdown with parking data:", parkingData); // Debugging - Log the data
+            const dropdown = document.getElementById("carParkDropdown");
+
+            // Clear previous dropdown options
+            dropdown.innerHTML = '<option value="">Select Car Park</option>';
+
+            parkingData.forEach(park => {
+                const option = document.createElement("option");
+                option.value = park.name || "Unknown";
+                option.dataset.freeSpaces = park.free_spaces || "0"; // Dynamically set free spaces
+                option.innerText = park.name || "Unnamed Car Park";
+                dropdown.appendChild(option);
+            });
+        }
+
+        // Check if the car park has free spaces
+        async function checkFreeSpaces() {
+            const parkingData = await fetchParkingData(); // Fetch live data
+            console.log("Fetched parking data for checking spaces:", parkingData); // Debugging - Log the data
+
+            const dropdown = document.getElementById("carParkDropdown");
+            const selectedOption = dropdown.options[dropdown.selectedIndex];
+
+            if (!selectedOption || !selectedOption.value) {
+                console.error("No valid selection.");
+                return;
+            }
+            const selectedCarPark = parkingData.find(park => park.name === selectedOption.value);
+            console.log("Selected car park:", selectedOption.value); // Debugging - Log the selected car park
+            console.log("Matched car park from live data:", selectedCarPark); // Debugging - Log the matched data
+            if (!selectedCarPark) {
+                console.error("Car park not found in live data.");
+                return;
+            }
+            const freeSpaces = parseInt(selectedCarPark.free_spaces) || 0;
+            console.log("Free spaces available:", freeSpaces); // Debugging - Log the free spaces
+            const resultContainer = document.getElementById("checkFreeSpaces");
+            resultContainer.className = "alert mt-3"; // Reset classes
+            if (freeSpaces > 0) {
+                resultContainer.innerText = `Yes, there are ${freeSpaces} free spaces available.`;
+                resultContainer.classList.add("alert-success");
+            } else {
+                resultContainer.innerText = "No, the car park is full.";
+                resultContainer.classList.add("alert-danger");
+            }
+            resultContainer.classList.remove("d-none");
+        }
+
+        // Handle car park schedule (opening hours) and free spaces
+        function handleCarParkSchedule(scheduleForToday, freeSpaces, selectedOption) {
+            const resultContainer = document.getElementById("carParkInfoResult");
+            const now = new Date();
+
+            if (scheduleForToday?.status === "24 Hours") {
+                resultContainer.innerHTML = `
+                    <strong>${selectedOption.value}:</strong> Open 24 hours today.<br>
+                    Free spaces: ${freeSpaces}.
+                `;
+                resultContainer.classList.add("alert-success");
+                return;
+            }
+
+            const closingTime = scheduleForToday?.closingTime || "N/A";
+            const [closingHours, closingMinutes] = closingTime.split(":").map(Number);
+            const minutesUntilClosing = (closingHours * 60 + closingMinutes) - (now.getHours() * 60 + now.getMinutes());
+
+            if (minutesUntilClosing <= 0) {
+                resultContainer.innerHTML = `
+                    <strong>${selectedOption.value}:</strong> Already closed.<br>
+                    Free spaces: ${freeSpaces}.
+                `;
+                resultContainer.classList.add("alert-danger");
+            } else if (minutesUntilClosing <= 60) {
+                resultContainer.innerHTML = `
+                    <strong>${selectedOption.value}:</strong> Closes in ${minutesUntilClosing} minutes.<br>
+                    Free spaces: ${freeSpaces}.
+                `;
+                resultContainer.classList.add("alert-warning");
+            } else {
+                resultContainer.innerHTML = `
+                    <strong>${selectedOption.value}:</strong> Closes at ${closingTime} today.<br>
+                    Free spaces: ${freeSpaces}.
+                `;
+                resultContainer.classList.add("alert-info");
+            }
+        }
+
+        // Display car park details: opening hours and height restriction
+        function displayCarParkInfo() {
+            const dropdown = document.getElementById("carParkDropdown");
+            const selectedCarPark = carParkDetails[dropdown.value];
+            const openingHoursResult = document.getElementById("openingHoursResult");
+            const heightRestrictionNotice = document.getElementById("heightRestrictionNotice");
+            const currentDay = getCurrentDayName();
+
+            if (selectedCarPark) {
+                // Display opening hours
+                const scheduleForToday = selectedCarPark.schedule[currentDay];
+                if (scheduleForToday) {
+                    if (scheduleForToday.status === "24 Hours") {
+                        openingHoursResult.innerHTML = `<strong>${dropdown.value}:</strong> Open 24 hours today.`;
+                        openingHoursResult.className = "alert alert-info";
+                    } else if (scheduleForToday.status === "Closed") {
+                        openingHoursResult.innerHTML = `<strong>${dropdown.value}:</strong> Closed today.`;
+                        openingHoursResult.className = "alert alert-warning";
+                    } else {
+                        const openingTime = scheduleForToday.openingTime || "Not Available";
+                        const closingTime = scheduleForToday.closingTime || "Not Available";
+                        openingHoursResult.innerHTML = `<strong>${dropdown.value}:</strong> Open from ${openingTime} to ${closingTime}.`;
+                        openingHoursResult.className = "alert alert-info";
+                    }
+                } else {
+                    openingHoursResult.innerHTML = `<strong>${dropdown.value}:</strong> Schedule not available.`;
+                    openingHoursResult.className = "alert alert-warning";
+                }
+
+                // Display height restriction
+                heightRestrictionNotice.innerHTML = `<strong>Important Notice:</strong> Height restriction for this car park is ${selectedCarPark.height} meters.`;
+                heightRestrictionNotice.className = "alert alert-danger";
+            } else {
+                // Handle invalid selection
+                openingHoursResult.innerHTML = "Please select a valid car park.";
+                openingHoursResult.className = "alert alert-warning";
+                heightRestrictionNotice.innerHTML = ""; // Clear height restriction notice
+            }
+        }
+
+
+
+        // Initialize dropdown and attach event listener
+        window.onload = function () {
+            populateDropdown();
+            document.getElementById("carParkDropdown").addEventListener("change", displayCarParkInfo);
+        };
+        // Attach event listener to dropdown for checking free spaces
+        document.getElementById("carParkDropdown").addEventListener("change", function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const freeSpaces = parseInt(selectedOption.dataset.freeSpaces) || 0;
+            checkFreeSpaces(freeSpaces); // Pass the free spaces to the function
+            displayCarParkInfo(); // Call the function to display car park info
+        });
+
+        // Event listener for the dropdown menu
+        document.getElementById("carParkDropdown").addEventListener("change", function () {
+            const selectedCarPark = this.value; // Get selected car park value
+            const resultContainer = document.getElementById("carParkInfoResult"); // Error message container
+
+            // Clear error message as soon as a valid car park is selected
+            if (selectedCarPark) {
+                resultContainer.innerHTML = ""; 
+                resultContainer.className = ""; // Remove any styling
+            }
+        });
+
+        // Event listener for the toggle opening hours button
+        document.getElementById("toggleOpeningHoursBtn").addEventListener("click", function () {
+            const dropdown = document.getElementById("carParkDropdown");
+            const selectedCarPark = dropdown.value;
+            const openingHoursResult = document.getElementById("openingHoursResult");
+            const resultContainer = document.getElementById("carParkInfoResult"); // Error message container
+
+            if (!selectedCarPark) {
+                // No car park selected, show an error message
+                resultContainer.innerHTML = `<strong>Error:</strong> Please select a car park first to view opening hours.`;
+                resultContainer.className = "alert alert-danger"; // Style the error message
+                return; // Exit the function if no car park is selected
+            }
+
+            // Toggle visibility of opening hours
+            if (openingHoursResult.style.display === "none" || openingHoursResult.style.display === "") {
+                openingHoursResult.style.display = "block";
+                this.textContent = "Hide Opening Hours"; // Change button text
+            } else {
+                openingHoursResult.style.display = "none";
+                this.textContent = "Show Opening Hours"; // Change button text
+            }
+        });
+
+        // Event listener for the toggle height restriction button
+        document.getElementById("toggleHeightRestrictionBtn").addEventListener("click", function () {
+            const heightRestrictionNotice = document.getElementById("heightRestrictionNotice");
+
+            if (!heightRestrictionNotice) {
+                console.error("Element 'heightRestrictionNotice' not found.");
+                return;
+            }
+
+            // Toggle visibility
+            if (heightRestrictionNotice.style.display === "none" || heightRestrictionNotice.style.display === "") {
+                heightRestrictionNotice.style.display = "block";
+                this.textContent = "Hide Height Restriction";
+            } else {
+                heightRestrictionNotice.style.display = "none";
+                this.textContent = "Show Height Restriction";
+            }
+        });
+
+    </script>
+</body>
+</html>
+
